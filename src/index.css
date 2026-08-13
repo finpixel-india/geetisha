@@ -88,9 +88,11 @@
     background-position: 55% 30%;
     object-fit: cover;
     object-position: 55% 30%;
-    transform: scale(1.02);
+    transform: scale(1.02) translateZ(0);
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+    image-rendering: auto;
+    filter: saturate(1.04) contrast(1.02);
   }
 
   .bg-overlay {
@@ -398,15 +400,6 @@
                 transform 0.4s cubic-bezier(0.2, 0.9, 0.2, 1),
                 visibility 0s;
     pointer-events: auto;
-  }
-
-  /* Web decoration */
-  .web-line {
-    position: absolute;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
-    transform-origin: left center;
-    pointer-events: none;
   }
 
   /* Button hover */

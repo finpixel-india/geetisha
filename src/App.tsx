@@ -931,26 +931,6 @@ const CloseIcon = () => (
   </svg>
 );
 
-/* ─── Web Decoration ─── */
-function WebDecoration() {
-  return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
-      {[15, 35, 60, 80].map((top, i) => (
-        <div
-          key={i}
-          className="web-line"
-          style={{
-            top: `${top}%`,
-            left: i % 2 === 0 ? '0' : '40%',
-            width: i % 2 === 0 ? '30%' : '60%',
-            transform: `rotate(${-5 + i * 3}deg)`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 function IntroAtmosphere() {
   const particles = [
     ['snow', '7%', '0s', '9s', '0.2rem', '-18px'],
@@ -1394,15 +1374,9 @@ export default function App() {
       {/* ──── MAIN SCREEN ──── */}
       {(!showIntro || introFading) && (
         <div className={`w-full h-full ${showIntro || introFading ? 'main-reveal' : ''}`}>
-          {/* Gradient overlays */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/18 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10" />
-          {/* Subtle red/blue vignette */}
-          <div className="absolute inset-0" style={{
-            background: 'radial-gradient(ellipse at 20% 30%, rgba(255,107,157,0.10) 0%, transparent 60%), radial-gradient(ellipse at 80% 70%, rgba(147,112,219,0.10) 0%, transparent 60%)'
-          }} />
-
-          <WebDecoration />
+          {/* Minimal contrast scrims — background stays clear and premium */}
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/22 via-transparent to-transparent" />
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/34 via-transparent to-transparent" />
 
           {/* Content container */}
           <div className="relative z-10 w-full h-full flex flex-col justify-between p-4 sm:p-6 md:p-8 lg:p-10" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
