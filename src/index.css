@@ -78,6 +78,10 @@
     background: #0d0714;
   }
 
+  .bg-solid-base {
+    background: #0d0714;
+  }
+
   .bg-layer {
     position: absolute;
     inset: 0;
@@ -108,6 +112,28 @@
   .bg-video {
     /* keeps decoding cheap and avoids layout thrash while looping */
     contain: paint;
+    will-change: opacity, transform;
+    transition: opacity 0.35s ease;
+  }
+
+  /* Dual-video seamless loop: active shows, standby hides underneath */
+  .bg-video-active {
+    opacity: 1;
+    z-index: 1;
+  }
+
+  .bg-video-standby {
+    opacity: 0;
+    z-index: 0;
+  }
+
+  /* When both are marked is-ready, let the active/standby classes drive opacity */
+  .bg-video.is-ready.bg-video-active {
+    opacity: 1;
+  }
+
+  .bg-video.is-ready.bg-video-standby {
+    opacity: 0;
   }
 
   .intro-wash {

@@ -1,85 +1,163 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-// @ts-ignore
-import animeBg from './assets/anime-bg.jpg';
-
 /* ─── Background sources ───
    Priority:
-   1. Custom image in public folder  → /images/background.png
-   2. Looping video in public folder → /videos/background.mp4
-   3. Bundled anime image (always available) as final safety net
+   1. Custom image in public/images/  → probes .png, .jpg, .jpeg, .webp
+   2. Looping video in public/videos/ → /videos/background.mp4
+      (plays nonstop, seamless loop via dual-video crossfade)
+   3. Solid dark background as final safety net
 */
-const CUSTOM_IMAGE_SRC = '/images/background.png';
+const IMAGE_CANDIDATES = [
+  '/images/background.png',
+  '/images/background.jpg',
+  '/images/background.jpeg',
+  '/images/background.webp',
+];
 const BACKGROUND_VIDEO_SRC = '/videos/background.mp4';
-const BACKGROUND_IMAGE = animeBg;
+
+/**
+ * Probe public/images/ for any supported background image.
+ * Returns a promise that resolves with the URL of the first image that loads,
+ * or rejects if none are found.
+ */
+function probeImage(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let remaining = IMAGE_CANDIDATES.length;
+    let found = false;
+
+    IMAGE_CANDIDATES.forEach((src) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => {
+        if (!found) {
+          found = true;
+          resolve(src);
+        }
+      };
+      img.onerror = () => {
+        remaining--;
+        if (remaining === 0 && !found) reject();
+      };
+      img.src = src;
+    });
+  });
+}
 
 /**
  * Single persistent background for the whole app.
  *
- * The bundled anime image renders immediately as a base layer, so the screen is
- * never empty. A custom image (or looping video) is probed in the background and
- * crossfaded in only once it is fully ready — this removes the blink/flash that
- * happened when the background element was swapped mid-render.
+ * • First tries to find a custom image in public/images/.
+ * • If no image is found, plays a looping video from public/videos/.
+ * • The video uses a dual-element crossfade technique: two <video> tags
+ *   alternate playback so the next loop iteration is pre-buffered and
+ *   crossfaded in just before the current one ends — this eliminates
+ *   the visible stutter/flash that single-element loop causes.
+ * • A solid dark colour is the absolute fallback so the screen is never empty.
  */
 function GlobalBackground() {
-  const [overlay, setOverlay] = useState<'none' | 'image' | 'video'>('none');
-  const [overlayReady, setOverlayReady] = useState(false);
+  const [mode, setMode] = useState<'loading' | 'image' | 'video' | 'none'>('loading');
+  const [imageSrc, setImageSrc] = useState('');
+  const [ready, setReady] = useState(false);
 
+  /* Video refs for dual-buffer seamless loop */
+  const videoA = useRef<HTMLVideoElement>(null);
+  const videoB = useRef<HTMLVideoElement>(null);
+  const [activeVideo, setActiveVideo] = useState<'A' | 'B'>('A');
+
+  /* ── Probe for image first, then fall back to video ── */
   useEffect(() => {
     let cancelled = false;
-    const probe = new Image();
-    probe.decoding = 'async';
-    probe.onload = () => {
-      if (cancelled) return;
-      setOverlay('image');
-    };
-    probe.onerror = () => {
-      if (cancelled) return;
-      setOverlay('video');
-    };
-    probe.src = CUSTOM_IMAGE_SRC;
-    return () => {
-      cancelled = true;
-      probe.onload = null;
-      probe.onerror = null;
-    };
+    probeImage()
+      .then((src) => {
+        if (cancelled) return;
+        setImageSrc(src);
+        setMode('image');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMode('video');
+      });
+    return () => { cancelled = true; };
   }, []);
 
-  const handleVideoFail = useCallback(() => {
-    setOverlay('none');
-    setOverlayReady(false);
+  /* ── Dual-video seamless loop logic ── */
+  useEffect(() => {
+    if (mode !== 'video') return;
+
+    const CROSSFADE_LEAD = 0.3; // seconds before end to start the swap
+    let raf: number;
+
+    const tick = () => {
+      const active = activeVideo === 'A' ? videoA.current : videoB.current;
+      const standby = activeVideo === 'A' ? videoB.current : videoA.current;
+
+      if (active && standby && active.duration && isFinite(active.duration)) {
+        const timeLeft = active.duration - active.currentTime;
+        if (timeLeft <= CROSSFADE_LEAD && standby.paused) {
+          // Pre-seek standby to start and play it
+          standby.currentTime = 0;
+          standby.play().catch(() => {});
+          setActiveVideo((prev) => (prev === 'A' ? 'B' : 'A'));
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mode, activeVideo]);
+
+  const handleVideoError = useCallback(() => {
+    setMode('none');
+    setReady(false);
   }, []);
 
   return (
     <div className="bg-root" aria-hidden="true">
-      <div
-        className="bg-layer"
-        style={{ backgroundImage: `url(${BACKGROUND_IMAGE})` }}
-      />
+      {/* Solid dark base — always present */}
+      <div className="bg-layer bg-solid-base" />
 
-      {overlay === 'image' && (
+      {/* Image overlay */}
+      {mode === 'image' && (
         <div
-          className={`bg-layer bg-overlay ${overlayReady ? 'is-ready' : ''}`}
-          style={{ backgroundImage: `url(${CUSTOM_IMAGE_SRC})` }}
+          className={`bg-layer bg-overlay ${ready ? 'is-ready' : ''}`}
+          style={{ backgroundImage: `url(${imageSrc})` }}
           ref={(node) => {
-            if (node && !overlayReady) requestAnimationFrame(() => setOverlayReady(true));
+            if (node && !ready) requestAnimationFrame(() => setReady(true));
           }}
         />
       )}
 
-      {overlay === 'video' && (
-        <video
-          className={`bg-layer bg-video bg-overlay ${overlayReady ? 'is-ready' : ''}`}
-          src={BACKGROUND_VIDEO_SRC}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          disablePictureInPicture
-          onCanPlay={() => setOverlayReady(true)}
-          onError={handleVideoFail}
-        />
+      {/* Video overlay — dual elements for gapless loop */}
+      {mode === 'video' && (
+        <>
+          <video
+            ref={videoA}
+            className={`bg-layer bg-video bg-overlay ${
+              ready ? 'is-ready' : ''
+            } ${activeVideo === 'A' ? 'bg-video-active' : 'bg-video-standby'}`}
+            src={BACKGROUND_VIDEO_SRC}
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            onCanPlayThrough={() => setReady(true)}
+            onError={handleVideoError}
+          />
+          <video
+            ref={videoB}
+            className={`bg-layer bg-video bg-overlay ${
+              ready ? 'is-ready' : ''
+            } ${activeVideo === 'B' ? 'bg-video-active' : 'bg-video-standby'}`}
+            src={BACKGROUND_VIDEO_SRC}
+            muted
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            onError={handleVideoError}
+          />
+        </>
       )}
     </div>
   );
